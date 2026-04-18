@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "871273551806",
+    "project_id": "fempy-c6d11",
+    "storage_bucket": "fempy-c6d11.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:871273551806:android:70745e67f539489f528bef",
+        "android_client_info": {
+          "package_name": "com.fempy.rework.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvfROGDXzICaAwZA2u34qjXnTyRTrjeSs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
