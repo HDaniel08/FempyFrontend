@@ -10,12 +10,13 @@ import {
   Alert,
   Animated,
   Platform,
+  Linking,
 } from "react-native";
 
 import { colors } from "../../../../theme/colors";
 import Button from "../../../ui/Button";
 import Chip from "../../../ui/Chip";
-import { API_BASE_URL, apiFetch, apiUpload } from "../../../shared/api/http";
+import { apiFetch } from "../../../shared/api/http";
 import { useAuth } from "../../../auth/AuthContext";
 import GoalsList from "../ui/GoalList";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -24,6 +25,11 @@ import ScreenShell from "../../../ui/ScreenShell";
 import { Image, Modal } from "react-native";
 import { InteractionManager } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
+import Constants from "expo-constants";
+import { setupAndRegisterPushToken } from "../../../shared/push/pushClient";
+import { API_BASE_URL } from "../../../shared/api/http";
 const AVATAR_PRESETS = [
   { id: "1", src: require("../../../../../assets/profile/avatar_1.png") },
   { id: "2", src: require("../../../../../assets/profile/avatar_2.png") },
@@ -33,6 +39,28 @@ const AVATAR_PRESETS = [
   { id: "6", src: require("../../../../../assets/profile/avatar_6.png") },
   { id: "7", src: require("../../../../../assets/profile/avatar_7.png") },
 ];
+
+function getProfileFormValues(user) {
+  const p = user?.profile ?? {};
+
+  return {
+    nickname: p.nickname ?? user?.firstName ?? "",
+    birthday: p.birthday ? isoDate(p.birthday) : "",
+    gender:
+      p.gender !== null && p.gender !== undefined ? String(p.gender) : "",
+    dateOfStart: p.dateOfStart ? isoDate(p.dateOfStart) : "",
+    description: p.description ?? "",
+    isAnonymous: !!p.isAnonymous,
+    isPublic: p.isPublic !== undefined ? !!p.isPublic : true,
+    onHoliday: !!p.onHoliday,
+    lessNotification: !!p.lessNotification,
+    emailNotification: !!p.emailNotification,
+    dailyNotification:
+      p.dailyNotification !== undefined ? !!p.dailyNotification : true,
+    avatarPresetId: p.profilePic ? String(p.profilePic) : "",
+    avatarUrl: p.profilePicUrl ?? "",
+  };
+}
 /**
  * AccountScreen (Enterprise Form)
  * - Betölt: /users/me
@@ -74,28 +102,29 @@ export default function AccountScreen() {
   const [avatarPresetId, setAvatarPresetId] = useState(""); // "1".."7"
   const [avatarUrl, setAvatarUrl] = useState(""); // feltöltött kép URL-je (ha van)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [pushStatus, setPushStatus] = useState("unknown");
+  const [debugTapCount, setDebugTapCount] = useState(0);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState("");
 
   const dirty = useMemo(() => {
     if (!serverUser?.profile) return false;
-    const p = serverUser.profile;
+    const initial = getProfileFormValues(serverUser);
 
     return (
-      (nickname ?? "") !== (p.nickname ?? "") ||
-      (birthday ?? "") !== (p.birthday ? isoDate(p.birthday) : "") ||
-      (gender ?? "") !== (p.gender ?? "") ||
-      (dateOfStart ?? "") !== (p.dateOfStart ? isoDate(p.dateOfStart) : "") ||
-      (description ?? "") !== (p.description ?? "") ||
-      !!isAnonymous !== !!p.isAnonymous ||
-      !!isPublic !== !!p.isPublic ||
-      !!onHoliday !== !!p.onHoliday ||
-      !!lessNotification !== !!p.lessNotification ||
-      !!emailNotification !== !!p.emailNotification ||
-      !!dailyNotification !== !!p.dailyNotification ||
-      (avatarPresetId ?? "") !==
-        (p.profilePic !== null && p.profilePic !== undefined
-          ? String(p.profilePic)
-          : "") ||
-      (avatarUrl ?? "") !== (p.profilePicUrl ?? "")
+      (nickname ?? "") !== initial.nickname ||
+      (birthday ?? "") !== initial.birthday ||
+      (gender ?? "") !== initial.gender ||
+      (dateOfStart ?? "") !== initial.dateOfStart ||
+      (description ?? "") !== initial.description ||
+      !!isAnonymous !== initial.isAnonymous ||
+      !!isPublic !== initial.isPublic ||
+      !!onHoliday !== initial.onHoliday ||
+      !!lessNotification !== initial.lessNotification ||
+      !!emailNotification !== initial.emailNotification ||
+      !!dailyNotification !== initial.dailyNotification ||
+      (avatarPresetId ?? "") !== initial.avatarPresetId ||
+      (avatarUrl ?? "") !== initial.avatarUrl
     );
   }, [
     serverUser,
@@ -111,12 +140,49 @@ export default function AccountScreen() {
     emailNotification,
     dailyNotification,
     avatarPresetId,
+    avatarUrl,
   ]);
 
   useEffect(() => {
     loadMe();
+    refreshPushPermission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function refreshPushPermission() {
+    try {
+      const permission = await Notifications.getPermissionsAsync();
+      setPushStatus(permission.status ?? "unknown");
+    } catch {
+      setPushStatus("unknown");
+    }
+  }
+
+  async function recoverPushPermission() {
+    try {
+      const res = await setupAndRegisterPushToken();
+      await refreshPushPermission();
+      Alert.alert(
+        res?.expoToken ? "Kesz" : "Ertesites",
+        res?.expoToken
+          ? "A push ertesitesek ujra regisztralva."
+          : "A push engedely nincs megadva. Nyisd meg a rendszerbeallitasokat.",
+      );
+    } catch (e) {
+      Alert.alert("Hiba", e?.message ?? "Nem sikerult a push beallitas.");
+    }
+  }
+
+  function handleDebugLogoPress() {
+    setDebugTapCount((count) => {
+      const next = count + 1;
+      if (next >= 10) {
+        setDebugOpen(true);
+        return 0;
+      }
+      return next;
+    });
+  }
 
   async function loadMe() {
     try {
@@ -135,27 +201,23 @@ export default function AccountScreen() {
   }
 
   function hydrateForm(u) {
-    const p = u?.profile ?? {};
+    const values = getProfileFormValues(u);
+  
+    setNickname(values.nickname);
+    setBirthday(values.birthday);
+    setGender(values.gender);
+    setDateOfStart(values.dateOfStart);
+    setDescription(values.description);
 
-    setNickname(p.nickname ?? u?.firstName ?? "");
-    setBirthday(p.birthday ? isoDate(p.birthday) : "");
-    setGender(
-      p.gender !== null && p.gender !== undefined ? String(p.gender) : "",
-    );
-    setDateOfStart(p.dateOfStart ? isoDate(p.dateOfStart) : "");
-    setDescription(p.description ?? "");
+    setIsAnonymous(values.isAnonymous);
+    setIsPublic(values.isPublic);
+    setOnHoliday(values.onHoliday);
 
-    setIsAnonymous(!!p.isAnonymous);
-    setIsPublic(p.isPublic !== undefined ? !!p.isPublic : true);
-    setOnHoliday(!!p.onHoliday);
-
-    setLessNotification(!!p.lessNotification);
-    setEmailNotification(!!p.emailNotification);
-    setDailyNotification(
-      p.dailyNotification !== undefined ? !!p.dailyNotification : true,
-    );
-    setAvatarPresetId(p.profilePic ? String(p.profilePic) : "");
-    setAvatarUrl(p.profilePicUrl ?? "");
+    setLessNotification(values.lessNotification);
+    setEmailNotification(values.emailNotification);
+    setDailyNotification(values.dailyNotification);
+    setAvatarPresetId(values.avatarPresetId);
+    setAvatarUrl(values.avatarUrl);
   }
 
   async function handleSave() {
@@ -204,6 +266,8 @@ export default function AccountScreen() {
 
       setServerUser(updated);
       hydrateForm(updated);
+      setSaveFeedback("Mentve");
+      setTimeout(() => setSaveFeedback(""), 2200);
 
       Alert.alert("Mentve", "A profil beállításai frissültek.");
     } catch (e) {
@@ -368,6 +432,18 @@ export default function AccountScreen() {
           <View style={styles.headerWrap}>
             <Text style={styles.h1}>Fiók</Text>
 
+            {pushStatus !== "granted" ? (
+              <View style={styles.statusBanner}>
+                <Text style={styles.statusBannerTitle}>Push nincs engedelyezve</Text>
+                <Text style={styles.statusBannerText}>A napi emlekeztetokhoz kapcsold be az ertesiteseket.</Text>
+              </View>
+            ) : null}
+            {saveFeedback ? (
+              <View style={styles.successBanner}>
+                <Text style={styles.successBannerText}>{saveFeedback}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.profileCard}>
               <View style={styles.profileTopRow}>
                 <Pressable
@@ -508,6 +584,27 @@ export default function AccountScreen() {
               onValueChange={setDailyNotification}
             />
           </Section>
+          <Section title="Adatvedelem es meres">
+            <ReadOnlyRowSmall
+              label="App aktivitasi adatok"
+              value="Az appban toltott ido, az utolso aktivitas es technikai esemenyek support es riport celbol meresre kerulnek."
+            />
+            <CardDivider />
+            <ReadOnlyRowSmall label="Push engedely" value={`Allapot: ${pushStatus}`} />
+            <View style={{ marginTop: 10, gap: 8 }}>
+              <Button label="Push ujraellenorzese" onPress={recoverPushPermission} variant="secondary" />
+              <Pressable onPress={() => Linking.openSettings()} style={styles.refreshBtn}>
+                <Text style={styles.refreshText}>Rendszerbeallitasok megnyitasa</Text>
+              </Pressable>
+            </View>
+          </Section>
+
+          <View style={styles.debugLogoWrap}>
+            <Pressable onPress={handleDebugLogoPress} hitSlop={12}>
+              <Image source={require("../../../../../assets/logo.png")} style={styles.debugLogo} resizeMode="contain" />
+            </Pressable>
+          </View>
+
           <Modal
             visible={avatarPickerOpen}
             transparent
@@ -567,6 +664,30 @@ export default function AccountScreen() {
             </Pressable>
           </Modal>
 
+          <Modal
+            visible={debugOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setDebugOpen(false)}
+          >
+            <Pressable style={styles.avatarModalBackdrop} onPress={() => setDebugOpen(false)}>
+              <Pressable style={styles.avatarModalCard} onPress={() => {}}>
+                <View style={styles.avatarModalHeader}>
+                  <Text style={styles.avatarModalTitle}>Debug info</Text>
+                  <Pressable onPress={() => setDebugOpen(false)} style={styles.avatarModalClose}>
+                    <Text style={styles.avatarModalCloseText}>×</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.debugText}>API: {API_BASE_URL}</Text>
+                <Text style={styles.debugText}>Tenant: {authUser?.tenant?.slug ?? authUser?.tenantId ?? "-"}</Text>
+                <Text style={styles.debugText}>User ID: {authUser?.id ?? "-"}</Text>
+                <Text style={styles.debugText}>Push permission: {pushStatus}</Text>
+                <Text style={styles.debugText}>Platform: {Device.osName ?? Platform.OS} {Device.osVersion ?? ""}</Text>
+                <Text style={styles.debugText}>App: {Constants.expoConfig?.version ?? "-"}</Text>
+              </Pressable>
+            </Pressable>
+          </Modal>
+
           {/* Save bar */}
           <View style={{ marginTop: 16 }}>
             <View style={styles.actionContainer}>
@@ -600,10 +721,14 @@ export default function AccountScreen() {
 /* -------------------- UI helpers -------------------- */
 
 function Section({ title, children }) {
+  const [open, setOpen] = useState(true);
   return (
     <View style={{ marginTop: 14 }}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>{children}</View>
+      <Pressable style={styles.sectionHeader} onPress={() => setOpen((prev) => !prev)}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionToggle}>{open ? "−" : "+"}</Text>
+      </Pressable>
+      {open ? <View style={styles.card}>{children}</View> : null}
     </View>
   );
 }
@@ -917,6 +1042,50 @@ const styles = {
     marginBottom: 8,
     marginTop: 2,
   },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    marginTop: 2,
+  },
+  sectionToggle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: colors.primary700,
+  },
+  statusBanner: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(245, 166, 35, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 166, 35, 0.25)",
+  },
+  statusBannerTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#8a5b00",
+  },
+  statusBannerText: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(53, 79, 110, 0.86)",
+  },
+  successBanner: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: "rgba(21, 115, 71, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(21, 115, 71, 0.18)",
+  },
+  successBannerText: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#157347",
+  },
 
   card: {
     backgroundColor: colors.white,
@@ -1200,6 +1369,21 @@ const styles = {
 
   avatarActions: {
     marginTop: 14,
+  },
+  debugLogoWrap: {
+    alignItems: "center",
+    marginTop: 18,
+    opacity: 0.45,
+  },
+  debugLogo: {
+    width: 38,
+    height: 38,
+  },
+  debugText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(53, 79, 110, 0.86)",
   },
   actionContainer: {
     marginTop: 16,

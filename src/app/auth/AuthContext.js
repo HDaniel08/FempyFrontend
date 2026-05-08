@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { AppState } from "react-native";
 import {
   clearSession,
   getAuthToken,
@@ -14,6 +15,10 @@ import {
   apiFetch,
 } from "../shared/api/http";
 import { setupAndRegisterPushToken } from "../shared/push/pushClient";
+import {
+  startUsageTracking,
+  stopUsageTracking,
+} from "../shared/usage/usageClient";
 /**
  * AuthContext célja:
  * - tudd, be van-e jelentkezve a user
@@ -26,7 +31,7 @@ const AuthContext = createContext(null);
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-
+ 
   if (!ctx) throw new Error("useAuth() csak AuthProvider alatt használható.");
   return ctx;
 }
@@ -36,6 +41,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // /auth/me válasz
   const [token, setToken] = useState(null);
   const [tenantSlug, setTenant] = useState(null);
+  const [tenantAppAccessEnabled, setTenantAppAccessEnabled] = useState(true);
+
+  async function refreshMe() {
+    const me = await apiFetch("/auth/me");
+    setUser(me);
+    if (typeof me?.tenant?.appAccessEnabled === "boolean") {
+      setTenantAppAccessEnabled(me.tenant.appAccessEnabled);
+    }
+    return me;
+  }
 
   // App induláskor: megnézzük van-e mentett session
   useEffect(() => {
@@ -55,23 +70,38 @@ export function AuthProvider({ children }) {
 
         // Session validálás: /auth/me
         // (Ha 401, az apiFetch clearSession-t csinál, és mi is resetelünk)
-        const me = await apiFetch("/auth/me");
-        setUser(me);
+        await refreshMe();
         // 🔔 PUSH REGISZTRÁCIÓ
         setupAndRegisterPushToken().catch((e) =>
           console.log("Push setup hiba (boot):", e?.message),
         );
+        startUsageTracking();
       } catch (e) {
         // bármi hiba → session reset
         await clearSession();
         setUser(null);
         setToken(null);
         setTenant(null);
+        setTenantAppAccessEnabled(true);
       } finally {
         setIsBooting(false);
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!token || !tenantSlug) return undefined;
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+
+      refreshMe().catch((e) => {
+        console.log("Session frissítés hiba:", e?.message);
+      });
+    });
+
+    return () => subscription.remove();
+  }, [token, tenantSlug]);
 
   /**
    * Global login:
@@ -85,6 +115,10 @@ export function AuthProvider({ children }) {
       body: { email, password },
       skipTenant: true,
     });
+
+    if (typeof res?.tenant?.appAccessEnabled === "boolean") {
+      setTenantAppAccessEnabled(res.tenant.appAccessEnabled);
+    }
    
     // Mentés SecureStore-ba (string)
     await setAuthToken(res.accessToken);
@@ -95,20 +129,22 @@ export function AuthProvider({ children }) {
     setTenant(res.tenant.slug);
 
     // Me lekérés (innentől már mehet a tenant header + token)
-    const me = await apiFetch("/auth/me");
-    setUser(me);
+    const me = await refreshMe();
     // 🔔 PUSH REGISZTRÁCIÓ
     setupAndRegisterPushToken().catch((e) =>
       console.log("Push setup hiba (boot):", e?.message),
     );
+    startUsageTracking();
     return me;
   }
 
   async function logout() {
+    stopUsageTracking();
     await clearSession();
     setUser(null);
     setToken(null);
     setTenant(null);
+    setTenantAppAccessEnabled(true);
   }
 
   const value = useMemo(() => {
@@ -118,10 +154,12 @@ export function AuthProvider({ children }) {
       user,
       token,
       tenantSlug,
+      tenantAppAccessEnabled,
       loginGlobal,
       logout,
+      refreshMe,
     };
-  }, [isBooting, user, token, tenantSlug]);
+  }, [isBooting, user, token, tenantSlug, tenantAppAccessEnabled]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

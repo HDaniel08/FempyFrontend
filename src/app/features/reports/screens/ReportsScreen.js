@@ -17,15 +17,23 @@ export default function ReportsScreen({ navigation }) {
         tone: "primary",
       },
       {
+        id: "question_topics",
+        title: "Témakör riportok",
+        description:
+          "Kitöltött kérdőív-kampányok saját, céges és magyar norma összehasonlítással.",
+        tone: "primary",
+      },
+      {
         id: "activity",
         title: "Aktivitás",
         description: "App használat és aktivitás események (később grafikon).",
         tone: "primary",
+        disabled: true,
       },
       {
         id: "q360",
-        title: "360° (később)",
-        description: "360-as kérdőív riportok (placeholder).",
+        title: "360°",
+        description: "360-as kérdőív riportok.",
         disabled: true,
         tone: "muted",
       },
@@ -34,8 +42,8 @@ export default function ReportsScreen({ navigation }) {
     if (isLeader) {
       base.push({
         id: "leadership_overview",
-        title: "Vezetői áttekintő (később)",
-        description: "Csapat átlagok, szórások, trendek (placeholder).",
+        title: "Vezetői áttekintő",
+        description: "Csapat átlagok, szórások, trendek.",
         disabled: true,
         tone: "muted",
       });

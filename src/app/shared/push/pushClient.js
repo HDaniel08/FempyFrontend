@@ -1,7 +1,7 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { registerDevice } from "../../features/notifications/api/deviceApi";
-import Constants from 'expo-constants';
+import Constants from "expo-constants";
 /**
  * iOS/Android: alap notification handler (ha app nyitva van)
  * - Most csak engedjük a megjelenítést
@@ -41,8 +41,13 @@ export async function setupAndRegisterPushToken() {
     return null;
   }
 
-  // 2) expo token (EAS projectId kellhet – ha hibázik, szólj és beállítjuk)
-  const tokenRes = await Notifications.getExpoPushTokenAsync();
+  // 2) expo token
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+
+  const tokenRes = await Notifications.getExpoPushTokenAsync(
+    projectId ? { projectId } : undefined,
+  );
   const expoToken = tokenRes.data;
 
   // 3) backend regisztráció

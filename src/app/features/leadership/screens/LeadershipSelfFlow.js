@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,14 @@ import {
   Pressable,
   Image,
   Linking,
+  TextInput,
 } from "react-native";
+import * as SecureStore from "expo-secure-store";
 import ScreenShell from "../../../ui/ScreenShell";
 import { colors } from "../../../../theme/colors";
-const CONTENT = [
+import { listLeadershipSelfContent } from "../api/leadershipContentApi";
+
+const FALLBACK_CONTENT = [
   {
     id: "ted1",
     title: "How Great Leaders Inspire Action",
@@ -81,6 +85,9 @@ const CONTENT = [
 ];
 export default function LeadershipSelfFlow() {
   const DefaultContentImage = require("../../../../../assets/leadership/default_content.png");
+  const FAVORITES_KEY = "leadership_self_favorites";
+  const LAST_OPENED_KEY = "leadership_self_last_opened";
+  const LAST_SYNC_KEY = "leadership_self_last_sync";
 
   const getDailyPick = (items) => {
     if (!items?.length) return null;
@@ -98,8 +105,55 @@ export default function LeadershipSelfFlow() {
     "Íme néhány gondolatébresztő, inspiráló tartalom, hogy haladhass tovább a vezetői fejlődés útján. Időről időre visszalátogathatsz ide, és kereshetsz érdeklődésednek és a rendelkezésedre álló időnek megfelelő tartalmakat:";
 
   const [selectedTypes, setSelectedTypes] = useState([]);
+  const [selectedTopic, setSelectedTopic] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
+  const [search, setSearch] = useState("");
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [lastOpenedId, setLastOpenedId] = useState(null);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [brokenThumbs, setBrokenThumbs] = useState({});
+  const [content, setContent] = useState(() =>
+    FALLBACK_CONTENT.map(normalizeContentItem)
+  );
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    listLeadershipSelfContent()
+      .then((items) => {
+        if (!mounted || !Array.isArray(items)) return;
+        setContent(items.map(normalizeContentItem));
+        const now = new Date().toISOString();
+        setLastSyncAt(now);
+        SecureStore.setItemAsync(LAST_SYNC_KEY, now).catch(() => {});
+      })
+      .catch(() => {
+        if (mounted) setContent(FALLBACK_CONTENT.map(normalizeContentItem));
+        if (mounted) setLoadError("Nem sikerult frissiteni, az utolso elerheto tartalmakat mutatjuk.");
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    SecureStore.getItemAsync(FAVORITES_KEY)
+      .then((raw) => setFavoriteIds(raw ? JSON.parse(raw) : []))
+      .catch(() => {});
+    SecureStore.getItemAsync(LAST_OPENED_KEY)
+      .then((id) => setLastOpenedId(id || null))
+      .catch(() => {});
+    SecureStore.getItemAsync(LAST_SYNC_KEY)
+      .then((value) => setLastSyncAt(value || null))
+      .catch(() => {});
+  }, []);
+
   const markBroken = (id) => {
     setBrokenThumbs((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
   };
@@ -110,9 +164,19 @@ export default function LeadershipSelfFlow() {
   };
 
   const filtered = useMemo(() => {
-    return CONTENT.filter((item) => {
+    const q = search.trim().toLowerCase();
+    return content.filter((item) => {
+      if (q) {
+        const haystack = [item.title, item.description, item.source, item.topicLabel]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       if (selectedTypes.length && !selectedTypes.includes(item.type))
         return false;
+
+      if (selectedTopic && item.topicSlug !== selectedTopic) return false;
 
       if (selectedTime === "5" && item.duration > 5) return false;
       if (selectedTime === "15" && item.duration > 15) return false;
@@ -120,8 +184,36 @@ export default function LeadershipSelfFlow() {
 
       return true;
     });
-  }, [selectedTypes, selectedTime]);
-  const dailyPick = useMemo(() => getDailyPick(CONTENT), []);
+  }, [content, selectedTypes, selectedTopic, selectedTime, search]);
+
+  const topics = useMemo(() => {
+    const map = new Map();
+    content.forEach((item) => {
+      if (item.topicSlug && item.topicLabel) map.set(item.topicSlug, item.topicLabel);
+    });
+    return [...map.entries()].map(([slug, label]) => ({ slug, label }));
+  }, [content]);
+
+  const dailyPick = useMemo(() => getDailyPick(content), [content]);
+  const lastOpened = useMemo(
+    () => content.find((item) => item.id === lastOpenedId),
+    [content, lastOpenedId],
+  );
+
+  function toggleFavorite(id) {
+    setFavoriteIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
+      SecureStore.setItemAsync(FAVORITES_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }
+
+  function openContent(item) {
+    setLastOpenedId(item.id);
+    SecureStore.setItemAsync(LAST_OPENED_KEY, item.id).catch(() => {});
+    Linking.openURL(item.url);
+  }
+
   return (
     <ScreenShell>
       <ScrollView contentContainerStyle={styles.page}>
@@ -136,7 +228,7 @@ export default function LeadershipSelfFlow() {
               styles.featured,
               pressed && { opacity: 0.92 },
             ]}
-            onPress={() => Linking.openURL(dailyPick.url)}
+            onPress={() => openContent(dailyPick)}
           >
             <View style={styles.featuredHeader}>
               <View style={styles.featuredAccent} />
@@ -204,12 +296,48 @@ export default function LeadershipSelfFlow() {
           />
         </View>
 
+        {topics.length ? (
+          <View style={styles.filterRow}>
+            {topics.map((topic) => (
+              <Chip
+                key={topic.slug}
+                label={topic.label}
+                active={selectedTopic === topic.slug}
+                onPress={() =>
+                  setSelectedTopic((current) =>
+                    current === topic.slug ? null : topic.slug
+                  )
+                }
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {lastOpened ? (
+          <Pressable style={styles.continueCard} onPress={() => openContent(lastOpened)}>
+            <Text style={styles.featuredLabel}>Folytatas innen</Text>
+            <Text style={styles.featuredTitle}>{lastOpened.title}</Text>
+            <Text style={styles.featuredMeta}>{lastOpened.duration} perc • {lastOpened.source}</Text>
+          </Pressable>
+        ) : null}
+
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Kereses cim, tema vagy forras alapjan"
+          placeholderTextColor={colors.textLight}
+          style={styles.searchInput}
+        />
+
         {/* LISTA */}
+        {loading ? <Text style={styles.loadingText}>Tartalmak betoltese...</Text> : null}
+        {loadError ? <Text style={styles.offlineText}>{loadError}</Text> : null}
+        {lastSyncAt ? <Text style={styles.loadingText}>Utolso sikeres frissites: {new Date(lastSyncAt).toLocaleString("hu-HU")}</Text> : null}
         {filtered.map((item) => (
           <Pressable
             key={item.id}
             style={styles.card}
-            onPress={() => Linking.openURL(item.url)}
+            onPress={() => openContent(item)}
           >
             <Image
               source={
@@ -223,11 +351,17 @@ export default function LeadershipSelfFlow() {
             />
 
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>{item.title}</Text>
+              <View style={styles.cardTitleRow}>
+                <Text style={[styles.title, { flex: 1 }]}>{item.title}</Text>
+                <Pressable onPress={() => toggleFavorite(item.id)} hitSlop={8}>
+                  <Text style={styles.favoriteText}>{favoriteIds.includes(item.id) ? "★" : "☆"}</Text>
+                </Pressable>
+              </View>
               <Text style={styles.desc}>{item.description}</Text>
 
               <Text style={styles.meta}>
                 {item.duration} perc • {item.source}
+                {item.topicLabel ? ` • ${item.topicLabel}` : ""}
               </Text>
             </View>
           </Pressable>
@@ -248,6 +382,36 @@ function Chip({ label, active, onPress }) {
       </Text>
     </Pressable>
   );
+}
+
+function normalizeContentItem(item) {
+  const topicLabel =
+    item.topic?.name ?? item.topicName ?? (typeof item.topic === "string" ? item.topic : "");
+  const topicSlug =
+    item.topic?.slug ?? item.topicSlug ?? slugify(topicLabel);
+
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    type: item.type,
+    duration: item.duration,
+    topic: topicLabel,
+    topicLabel,
+    topicSlug,
+    url: item.url,
+    source: item.source,
+    thumbnail: item.thumbnail,
+  };
+}
+
+function slugify(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 const styles = {
@@ -289,6 +453,38 @@ const styles = {
     flexDirection: "row",
     gap: 8,
     flexWrap: "wrap",
+  },
+  searchInput: {
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.primary100,
+    backgroundColor: "#fff",
+    paddingHorizontal: 14,
+    color: colors.textDark,
+    fontWeight: "700",
+  },
+  continueCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(250,83,147,0.18)",
+  },
+  offlineText: {
+    fontSize: 12,
+    color: "#9b6a00",
+    fontWeight: "800",
+  },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  favoriteText: {
+    fontSize: 22,
+    color: colors.accent300,
+    fontWeight: "900",
   },
 
   chip: {
@@ -347,6 +543,11 @@ const styles = {
     marginTop: 6,
     fontSize: 11,
     color: colors.accent300,
+    fontWeight: "700",
+  },
+  loadingText: {
+    fontSize: 12,
+    color: colors.textLight,
     fontWeight: "700",
   },
   featured: {

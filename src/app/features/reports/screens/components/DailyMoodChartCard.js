@@ -7,17 +7,130 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import { LineChart } from "react-native-chart-kit";
 import { colors } from "../../../../../theme/colors";
 import { apiFetch } from "../../../../shared/api/http";
 
 const { width: screenWidth } = Dimensions.get("window");
 
 const RANGE_OPTIONS = [5, 14, 30];
+const CHART_HEIGHT = 150;
+const CHART_WIDTH = screenWidth - 76;
 
 function formatShortDate(dateString) {
   const d = new Date(dateString);
   return `${d.getMonth() + 1}.${d.getDate()}.`;
+}
+
+function clampMood(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(5, value));
+}
+
+function MoodLineChart({ data, width = CHART_WIDTH, height = CHART_HEIGHT }) {
+  const padding = {
+    top: 12,
+    right: 14,
+    bottom: 26,
+    left: 30,
+  };
+
+  const innerWidth = Math.max(1, width - padding.left - padding.right);
+  const innerHeight = Math.max(1, height - padding.top - padding.bottom);
+  const denominator = Math.max(1, data.length - 1);
+
+  const points = data.map((item, index) => {
+    const mood = clampMood(item.mood);
+    const x = padding.left + (index / denominator) * innerWidth;
+    const y = padding.top + ((5 - mood) / 5) * innerHeight;
+
+    return {
+      x,
+      y,
+      mood,
+      label: item.label,
+      showLabel: item.showLabel,
+    };
+  });
+
+  const labelY = padding.top + innerHeight + 18;
+  const segments = points.slice(1).map((point, index) => {
+    const previous = points[index];
+    const dx = point.x - previous.x;
+    const dy = point.y - previous.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    return {
+      key: `${previous.x}-${point.x}-${index}`,
+      left: (previous.x + point.x) / 2 - length / 2,
+      top: (previous.y + point.y) / 2 - 1.5,
+      length,
+      angle,
+    };
+  });
+
+  return (
+    <View style={[styles.nativeChart, { width, height }]}>
+      {[0, 1, 2, 3, 4, 5].map((value) => {
+        const y = padding.top + ((5 - value) / 5) * innerHeight;
+
+        return (
+          <View key={value}>
+            <View
+              style={[
+                styles.chartGridLine,
+                { left: padding.left, top: y, width: innerWidth },
+              ]}
+            />
+            <Text
+              style={[
+                styles.chartYLabel,
+                { left: 0, top: y - 6, width: padding.left - 10 },
+              ]}
+            >
+              {value}
+            </Text>
+          </View>
+        );
+      })}
+
+      {segments.map((segment) => (
+        <View
+          key={segment.key}
+          style={[
+            styles.chartSegment,
+            {
+              left: segment.left,
+              top: segment.top,
+              width: segment.length,
+              transform: [{ rotate: `${segment.angle}deg` }],
+            },
+          ]}
+        />
+      ))}
+
+      {points.map((point, index) => (
+        <View key={`${point.x}-${index}`}>
+          <View
+            style={[
+              styles.chartPoint,
+              { left: point.x - 4, top: point.y - 4 },
+            ]}
+          />
+          {point.showLabel && (
+            <Text
+              style={[
+                styles.chartXLabel,
+                { left: point.x - 20, top: labelY - 7 },
+              ]}
+            >
+              {point.label}
+            </Text>
+          )}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 export default function DailyMoodChartCard() {
@@ -153,33 +266,24 @@ export default function DailyMoodChartCard() {
     animatedRange,
   ]);
 
- const chartData = useMemo(() => {
-  return {
-    labels: visibleData.map((item, index) => {
-      if (visibleData.length <= 7) return formatShortDate(item.date);
-      if (index === 0 || index === visibleData.length - 1) {
-        return formatShortDate(item.date);
+  const chartData = useMemo(() => {
+    return visibleData.map((item, index) => {
+      const isFirstOrLast = index === 0 || index === visibleData.length - 1;
+      let showLabel = true;
+
+      if (visibleData.length > 14) {
+        showLabel = isFirstOrLast || index % 6 === 0;
+      } else if (visibleData.length > 7) {
+        showLabel = isFirstOrLast || index % 3 === 0;
       }
-      if (visibleData.length <= 14) {
-        return index % 3 === 0 ? formatShortDate(item.date) : "";
-      }
-      return index % 6 === 0 ? formatShortDate(item.date) : "";
-    }),
-    datasets: [
-      {
-        data: visibleData.map((item) => item.mood),
-        strokeWidth: 3,
-      },
-      {
-        data: visibleData.map(() => 5),
-        color: () => "transparent",
-        strokeWidth: 0,
-        withDots: false,
-      },
-    ],
-    legend: [],
-  };
-}, [visibleData]);
+
+      return {
+        ...item,
+        label: showLabel ? formatShortDate(item.date) : "",
+        showLabel,
+      };
+    });
+  }, [visibleData]);
 
   const handleRangePress = (days) => {
     if (days === selectedRange) return;
@@ -300,46 +404,10 @@ export default function DailyMoodChartCard() {
             </Text>
           </View>
         ) : (
-          <LineChart
+          <MoodLineChart
             data={chartData}
-            width={screenWidth - 76}
-            height={150}
-            withDots
-            withShadow={false}
-            withInnerLines
-            withOuterLines={false}
-            withVerticalLines={false}
-            withHorizontalLines
-            fromZero
-            yAxisInterval={1}
-            segments={5}
-            chartConfig={{
-              backgroundGradientFrom: colors.white,
-              backgroundGradientTo: colors.white,
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(211, 19, 92, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(108, 108, 112, ${opacity})`,
-              propsForDots: {
-                r: "2.5",
-                strokeWidth: "2",
-                stroke: colors.accent300,
-                fill:  colors.accent300,
-              },
-              propsForBackgroundLines: {
-                stroke: colors.primary100,
-                strokeDasharray: "",
-                strokeWidth: 1,
-              },
-              propsForLabels: {
-                fontSize: 10,
-              },
-              strokeWidth: 3,
-            }}
-            style={styles.chart}
-            yLabelsOffset={8}
-            xLabelsOffset={-3}
-            formatYLabel={(value) => `${value}`}
-            getDotColor={() => colors.accent500}
+            width={CHART_WIDTH}
+            height={CHART_HEIGHT}
           />
         )}
       </View>
@@ -499,8 +567,52 @@ const styles = {
   },
 
   chart: {
-  marginLeft: -45,
+    marginLeft: -45,
     borderRadius: 16,
+  },
+
+  nativeChart: {
+    position: "relative",
+  },
+
+  chartGridLine: {
+    position: "absolute",
+    height: 1,
+    backgroundColor: colors.primary100,
+  },
+
+  chartYLabel: {
+    position: "absolute",
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(108, 108, 112, 0.88)",
+    textAlign: "right",
+  },
+
+  chartSegment: {
+    position: "absolute",
+    height: 3,
+    borderRadius: 3,
+    backgroundColor: colors.accent500,
+  },
+
+  chartPoint: {
+    position: "absolute",
+    width: 8,
+    height: 8,
+    borderRadius: 8,
+    backgroundColor: colors.accent300,
+    borderWidth: 1.5,
+    borderColor: colors.white,
+  },
+
+  chartXLabel: {
+    position: "absolute",
+    width: 40,
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(108, 108, 112, 0.88)",
+    textAlign: "center",
   },
 
   loaderWrap: {

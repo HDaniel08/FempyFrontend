@@ -3,6 +3,7 @@ import { View, Text, ScrollView } from "react-native";
 import { colors } from "../../../../theme/colors";
 import ScreenShell from "../../../ui/ScreenShell";
 import DailyMoodChartCard from "./components/DailyMoodChartCard";
+import DailyQuestionTopicReports from "./components/DailyQuestionTopicReports";
 
 export default function ReportDetailScreen({ route }) {
   const reportId = route?.params?.reportId;
@@ -13,6 +14,11 @@ export default function ReportDetailScreen({ route }) {
         return {
           title: "Napi monitorozás",
           subtitle: "Napi trendek és állapotok.",
+        };
+      case "question_topics":
+        return {
+          title: "Témakör riportok",
+          subtitle: "Kampányok utáni kérdésenkénti összehasonlítás.",
         };
       case "activity":
         return {
@@ -46,6 +52,8 @@ export default function ReportDetailScreen({ route }) {
     <DailyMoodChartCard />
 
 )}
+
+      {reportId === "question_topics" && <DailyQuestionTopicReports />}
 
       {reportId === "activity" && (
         <Section title="Következő lépés">

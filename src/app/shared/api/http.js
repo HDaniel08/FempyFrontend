@@ -2,10 +2,13 @@ import * as SecureStore from "expo-secure-store";
 
 /**
  * Itt állítod be a backend címet.
- * Fizikai Android telefon Expo Go-val: a géped LAN IP-je!
- * Pl: http://192.168.1.50:3000
+ * Lokális teszthez EXPO_PUBLIC_API_BASE_URL-lal felülírható.
  */
-export const API_BASE_URL = "https://considerate-youthfulness-production-75bb.up.railway.app";
+const DEFAULT_API_BASE_URL =
+  "https://considerate-youthfulness-production-75bb.up.railway.app";
+
+export const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL;
 
 const TOKEN_KEY = "auth_token";
 const TENANT_KEY = "tenant_slug";
