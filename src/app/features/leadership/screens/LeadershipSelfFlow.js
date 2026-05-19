@@ -131,7 +131,7 @@ export default function LeadershipSelfFlow() {
       })
       .catch(() => {
         if (mounted) setContent(FALLBACK_CONTENT.map(normalizeContentItem));
-        if (mounted) setLoadError("Nem sikerult frissiteni, az utolso elerheto tartalmakat mutatjuk.");
+        if (mounted) setLoadError("Nem sikerült frissíteni, az utolsó elérhető tartalmakat mutatjuk.");
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -332,7 +332,7 @@ export default function LeadershipSelfFlow() {
         {/* LISTA */}
         {loading ? <Text style={styles.loadingText}>Tartalmak betoltese...</Text> : null}
         {loadError ? <Text style={styles.offlineText}>{loadError}</Text> : null}
-        {lastSyncAt ? <Text style={styles.loadingText}>Utolso sikeres frissites: {new Date(lastSyncAt).toLocaleString("hu-HU")}</Text> : null}
+        {lastSyncAt ? <Text style={styles.loadingText}>Utolsó sikeres frissítés: {new Date(lastSyncAt).toLocaleString("hu-HU")}</Text> : null}
         {filtered.map((item) => (
           <Pressable
             key={item.id}

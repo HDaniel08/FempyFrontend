@@ -163,13 +163,13 @@ export default function AccountScreen() {
       const res = await setupAndRegisterPushToken();
       await refreshPushPermission();
       Alert.alert(
-        res?.expoToken ? "Kesz" : "Ertesites",
+        res?.expoToken ? "Kész" : "Értesítés",
         res?.expoToken
-          ? "A push ertesitesek ujra regisztralva."
-          : "A push engedely nincs megadva. Nyisd meg a rendszerbeallitasokat.",
+          ? "A push értesítések újra regisztrálva."
+          : "A push engedély nincs megadva. Nyisd meg a rendszerbeállításokat.",
       );
     } catch (e) {
-      Alert.alert("Hiba", e?.message ?? "Nem sikerult a push beallitas.");
+      Alert.alert("Hiba", e?.message ?? "Nem sikerült a push beállítás.");
     }
   }
 
@@ -434,8 +434,8 @@ export default function AccountScreen() {
 
             {pushStatus !== "granted" ? (
               <View style={styles.statusBanner}>
-                <Text style={styles.statusBannerTitle}>Push nincs engedelyezve</Text>
-                <Text style={styles.statusBannerText}>A napi emlekeztetokhoz kapcsold be az ertesiteseket.</Text>
+                <Text style={styles.statusBannerTitle}>Push nincs engedélyezve</Text>
+                <Text style={styles.statusBannerText}>A napi emlékeztetőkhöz kapcsold be az értesítéseket.</Text>
               </View>
             ) : null}
             {saveFeedback ? (
@@ -584,17 +584,17 @@ export default function AccountScreen() {
               onValueChange={setDailyNotification}
             />
           </Section>
-          <Section title="Adatvedelem es meres">
+          <Section title="Adatvédelem és mérés">
             <ReadOnlyRowSmall
-              label="App aktivitasi adatok"
-              value="Az appban toltott ido, az utolso aktivitas es technikai esemenyek support es riport celbol meresre kerulnek."
+              label="App aktivitási adatok"
+              value="Az appban töltött idő, az utolsó aktivitás és a technikai események support- és riportcélból mérésre kerülnek."
             />
             <CardDivider />
-            <ReadOnlyRowSmall label="Push engedely" value={`Allapot: ${pushStatus}`} />
+            <ReadOnlyRowSmall label="Push engedély" value={`Állapot: ${pushStatus}`} />
             <View style={{ marginTop: 10, gap: 8 }}>
-              <Button label="Push ujraellenorzese" onPress={recoverPushPermission} variant="secondary" />
+              <Button label="Push újraellenőrzése" onPress={recoverPushPermission} variant="secondary" />
               <Pressable onPress={() => Linking.openSettings()} style={styles.refreshBtn}>
-                <Text style={styles.refreshText}>Rendszerbeallitasok megnyitasa</Text>
+                <Text style={styles.refreshText}>Rendszerbeállítások megnyitása</Text>
               </Pressable>
             </View>
           </Section>
