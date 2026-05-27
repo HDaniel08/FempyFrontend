@@ -77,12 +77,16 @@ export default function AccountScreen() {
   function runAfterTwoFrames(fn) {
     requestAnimationFrame(() => requestAnimationFrame(fn));
   }
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, changePassword, refreshMe } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [serverUser, setServerUser] = useState(null);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Form mezők (profile)
   const [nickname, setNickname] = useState("");
@@ -278,6 +282,42 @@ export default function AccountScreen() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!currentPassword.trim()) {
+      Alert.alert("Hiba", "Add meg a jelenlegi jelszavad.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      Alert.alert("Hiba", "Az uj jelszo legalabb 8 karakter legyen.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Hiba", "A ket jelszo nem egyezik.");
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+      await changePassword({
+        currentPassword,
+        newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      const fresh = await refreshMe();
+      setServerUser(fresh);
+      Alert.alert("Mentve", "A jelszavad frissult.");
+    } catch (e) {
+      Alert.alert(
+        "Hiba",
+        e?.message ?? "Nem sikerult modositani a jelszavad.",
+      );
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -521,6 +561,45 @@ export default function AccountScreen() {
             <Field label="Nem">
               <GenderSelect value={gender} onChange={setGender} />
             </Field>
+          </Section>
+
+          <Section title="Jelszó">
+            <Text style={styles.passwordSectionHint}>
+              Biztonsági okokból a jelszót csak a jelenlegi jelszó megadása
+              után lehet módosítani.
+            </Text>
+            <Field label="Jelenlegi jelszó">
+              <ModernInput
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </Field>
+            <Field label="Új jelszó">
+              <ModernInput
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </Field>
+            <Field label="Új jelszó még egyszer">
+              <ModernInput
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </Field>
+            <View style={{ marginTop: 12 }}>
+              <Button
+                label={passwordSaving ? "Mentés..." : "Jelszó módosítása"}
+                onPress={handleChangePassword}
+                variant="secondary"
+                disabled={passwordSaving}
+              />
+            </View>
           </Section>
 
           <Section title="Rólad">
@@ -1118,6 +1197,12 @@ const styles = {
     fontSize: 14,
     fontWeight: "700",
     color: "rgba(18, 34, 56, 0.88)",
+  },
+  passwordSectionHint: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+    color: "rgba(53, 79, 110, 0.78)",
   },
 
   twoColRow: {

@@ -138,6 +138,20 @@ export function AuthProvider({ children }) {
     return me;
   }
 
+  async function changePassword(input) {
+    const updated = await apiFetch("/users/me/password", {
+      method: "PATCH",
+      body: input,
+    });
+    const nextUser = updated?.data ?? updated;
+
+    setUser(nextUser);
+    if (typeof nextUser?.tenant?.appAccessEnabled === "boolean") {
+      setTenantAppAccessEnabled(nextUser.tenant.appAccessEnabled);
+    }
+    return nextUser;
+  }
+
   async function logout() {
     stopUsageTracking();
     await clearSession();
@@ -158,6 +172,7 @@ export function AuthProvider({ children }) {
       loginGlobal,
       logout,
       refreshMe,
+      changePassword,
     };
   }, [isBooting, user, token, tenantSlug, tenantAppAccessEnabled]);
 

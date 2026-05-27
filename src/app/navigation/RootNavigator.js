@@ -1,5 +1,12 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -11,7 +18,8 @@ import { colors } from "../../theme/colors";
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-  const { isBooting, isAuthenticated, tenantAppAccessEnabled } = useAuth();
+  const { isBooting, isAuthenticated, tenantAppAccessEnabled, user, changePassword } =
+    useAuth();
 
   const isAppAccessDisabled =
     isAuthenticated && tenantAppAccessEnabled === false;
@@ -31,6 +39,85 @@ export default function RootNavigator() {
       </NavigationContainer>
 
       {isAppAccessDisabled ? <TenantAccessWall /> : null}
+      {isAuthenticated && user?.mustChangePassword ? (
+        <ForcedPasswordModal onSubmit={changePassword} />
+      ) : null}
+    </View>
+  );
+}
+
+function ForcedPasswordModal({ onSubmit }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    setError("");
+    if (newPassword.length < 8) {
+      setError("Az uj jelszo legalabb 8 karakter legyen.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("A ket jelszo nem egyezik.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onSubmit({ newPassword });
+    } catch (e) {
+      setError(e?.message ?? "Nem sikerult beallitani a jelszot.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <View style={styles.passwordWall} pointerEvents="auto">
+      <View style={styles.passwordCard}>
+        <Text style={styles.passwordTitle}>Allitsd be a jelszavad</Text>
+        <Text style={styles.passwordText}>
+          Az elso belepeshez adj meg egy sajat jelszot. Ezt kesobb a fiok
+          beallitasainal is modositani tudod.
+        </Text>
+
+        <TextInput
+          value={newPassword}
+          onChangeText={setNewPassword}
+          placeholder="Uj jelszo"
+          placeholderTextColor="rgba(74, 93, 122, 0.45)"
+          secureTextEntry
+          autoCapitalize="none"
+          style={styles.passwordInput}
+        />
+        <TextInput
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          placeholder="Uj jelszo meg egyszer"
+          placeholderTextColor="rgba(74, 93, 122, 0.45)"
+          secureTextEntry
+          autoCapitalize="none"
+          style={styles.passwordInput}
+        />
+
+        {error ? <Text style={styles.passwordError}>{error}</Text> : null}
+
+        <Pressable
+          onPress={handleSubmit}
+          disabled={saving}
+          style={({ pressed }) => [
+            styles.passwordButton,
+            (saving || pressed) && styles.passwordButtonPressed,
+          ]}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.passwordButtonText}>Jelszo beallitasa</Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -91,5 +178,77 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.textLight,
     textAlign: "center",
+  },
+  passwordWall: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10000,
+    elevation: 10000,
+    backgroundColor: "rgba(245, 249, 253, 0.88)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  passwordCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 20,
+    padding: 20,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: "rgba(190, 207, 227, 0.72)",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  passwordTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "900",
+    color: "rgba(18, 34, 56, 0.92)",
+  },
+  passwordText: {
+    marginTop: 8,
+    marginBottom: 14,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    color: colors.textLight,
+  },
+  passwordInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "rgba(190, 207, 227, 0.70)",
+    backgroundColor: "rgba(80, 126, 179, 0.06)",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "rgba(18, 34, 56, 0.92)",
+  },
+  passwordError: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: colors.accent700,
+  },
+  passwordButton: {
+    marginTop: 16,
+    minHeight: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent500,
+  },
+  passwordButtonPressed: {
+    opacity: 0.72,
+  },
+  passwordButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "900",
   },
 });
