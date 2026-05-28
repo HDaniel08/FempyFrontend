@@ -675,14 +675,9 @@ export default function AccountScreen() {
               <Pressable onPress={() => Linking.openSettings()} style={styles.refreshBtn}>
                 <Text style={styles.refreshText}>Rendszerbeállítások megnyitása</Text>
               </Pressable>
+
             </View>
           </Section>
-
-          <View style={styles.debugLogoWrap}>
-            <Pressable onPress={handleDebugLogoPress} hitSlop={12}>
-              <Image source={require("../../../../../assets/logo.png")} style={styles.debugLogo} resizeMode="contain" />
-            </Pressable>
-          </View>
 
           <Modal
             visible={avatarPickerOpen}
@@ -786,9 +781,14 @@ export default function AccountScreen() {
               <Pressable onPress={loadMe} style={styles.refreshBtn}>
                 <Text style={styles.refreshText}>Frissítés a szerverről</Text>
               </Pressable>
+              <View style={styles.debugLogoWrap}>
+                <Pressable onPress={handleDebugLogoPress} hitSlop={12}>
+                  <Image source={require("../../../../../assets/logo.png")} style={styles.debugLogo} resizeMode="contain" />
+                </Pressable>
+              </View>
             </View>
 
-          
+
           </View>
        </KeyboardAwareScrollView>
       </View>
@@ -1458,11 +1458,12 @@ const styles = {
   debugLogoWrap: {
     alignItems: "center",
     marginTop: 18,
-    opacity: 0.45,
+    marginBottom: 8,
+    opacity: 0.62,
   },
   debugLogo: {
-    width: 38,
-    height: 38,
+    width: 156,
+    height: 54,
   },
   debugText: {
     marginTop: 8,
