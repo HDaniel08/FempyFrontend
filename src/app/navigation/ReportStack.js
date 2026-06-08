@@ -18,7 +18,11 @@ export default function ReportsStack() {
       <Stack.Screen
         name="ReportDetail"
         component={ReportDetailScreen}
-        options={{ title: "Riport részletek" }}
+        options={{
+          title: "Riport részletek",
+          headerShown: true,
+          gestureEnabled: true,
+        }}
       />
     </Stack.Navigator>
   );

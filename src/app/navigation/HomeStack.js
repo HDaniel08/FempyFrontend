@@ -16,7 +16,11 @@ export default function HomeStack() {
       <Stack.Screen
         name="DailyQuestions"
         component={DailyQuestionsScreen}
-        options={{ title: "Napi kérdőív" }}
+        options={{
+          title: "Napi kérdőív",
+          headerShown: true,
+          gestureEnabled: true,
+        }}
       />
     </Stack.Navigator>
   );

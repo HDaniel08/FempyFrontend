@@ -127,7 +127,7 @@ export default function DailyQuestionsScreen() {
 
             <Pressable
               style={styles.backButton}
-              onPress={() => navigation.navigate("HomeStack")}
+              onPress={() => navigation.goBack()}
             >
               <Text style={styles.backButtonText}>Vissza a főoldalra</Text>
             </Pressable>
