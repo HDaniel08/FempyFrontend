@@ -1,4 +1,5 @@
 import React from "react";
+import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import ReportsScreen from "../features/reports/screens/ReportsScreen";
@@ -20,7 +21,7 @@ export default function ReportsStack() {
         component={ReportDetailScreen}
         options={{
           title: "Riport részletek",
-          headerShown: true,
+          headerShown: Platform.OS === "ios",
           gestureEnabled: true,
         }}
       />

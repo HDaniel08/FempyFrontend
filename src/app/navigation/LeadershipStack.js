@@ -1,4 +1,5 @@
 import React from "react";
+import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import LeadershipScreen from "../features/leadership/screens/LeadershipScreen";
 import LeadershipPersonFlow from "../features/leadership/screens/LeadershipPersonFlow";
@@ -17,7 +18,7 @@ export default function LeadershipStack() {
         component={LeadershipPersonFlow}
         options={{
           title: "Kolléga helyzete",
-          headerShown: true,
+          headerShown: Platform.OS === "ios",
           gestureEnabled: true,
         }}
       />
@@ -26,7 +27,7 @@ export default function LeadershipStack() {
         component={LeadershipTeamFlow}
         options={{
           title: "Csapathelyzet",
-          headerShown: true,
+          headerShown: Platform.OS === "ios",
           gestureEnabled: true,
         }}
       />
@@ -35,7 +36,7 @@ export default function LeadershipStack() {
         component={LeadershipSelfFlow}
         options={{
           title: "Saját fejlődés",
-          headerShown: true,
+          headerShown: Platform.OS === "ios",
           gestureEnabled: true,
         }}
       />

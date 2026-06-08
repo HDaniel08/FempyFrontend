@@ -1,4 +1,5 @@
 import React from "react";
+import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import HomeScreen from "../features/home/screens/HomeScreen";
 import DailyQuestionsScreen from "../features/home/screens/DailyQuestionsScreen";
@@ -18,7 +19,7 @@ export default function HomeStack() {
         component={DailyQuestionsScreen}
         options={{
           title: "Napi kérdőív",
-          headerShown: true,
+          headerShown: Platform.OS === "ios",
           gestureEnabled: true,
         }}
       />
