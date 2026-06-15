@@ -142,24 +142,32 @@ export default function MoodWidget() {
     }
   };
   const handleSaveComment = async () => {
-  try {
-     setLoading(true);
-    
+    try {
       setLoading(true);
 
-      const res = await apiFetch("/daily-mood/today/comment", {
+      await apiFetch("/daily-mood/today/comment", {
         method: "PATCH",
-        body: {comment},
+        body: { comment },
+        networkRetries: 2,
       });
-   
 
-    setCommentModalOpen(false);
-  } catch (e) {
-    Alert.alert("Hiba", "A komment mentése nem sikerült.");
-  } finally {
-    setLoading(false);
-  }
-};
+      setCommentModalOpen(false);
+    } catch (e) {
+      const isNetworkError =
+        e instanceof TypeError &&
+        /network request failed|failed to fetch|load failed/i.test(
+          String(e?.message),
+        );
+      Alert.alert(
+        "Hiba",
+        isNetworkError
+          ? "A hálózati kapcsolat megszakadt. Ellenőrizd az internetkapcsolatot, majd próbáld újra."
+          : e?.message || "A komment mentése nem sikerült.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <WidgetCard>

@@ -10,7 +10,10 @@ import { colors } from "../../../../../theme/colors";
 import { apiFetch } from "../../../../shared/api/http";
 
 const SCALE_WIDTH = 260;
-const SCALE_TRACK_WIDTH = SCALE_WIDTH - 36;
+const SCALE_PADDING = 18;
+const SCALE_TRACK_WIDTH = SCALE_WIDTH - SCALE_PADDING * 2;
+const SCALE_TICK_WIDTH = 28;
+const SCALE_MARKER_WIDTH = 34;
 
 const CP1252_SPECIAL_BYTES = {
   "€": 0x80,
@@ -91,18 +94,26 @@ function formatPeriod(start, end) {
   return `${start.replaceAll("-", ".")} - ${end.replaceAll("-", ".")}`;
 }
 
-function markerLeft(value) {
+function scalePosition(value) {
   const clamped = clamp(value);
   if (clamped === null) return null;
-  return ((clamped - 1) / 4) * SCALE_TRACK_WIDTH;
+  return SCALE_PADDING + ((clamped - 1) / 4) * SCALE_TRACK_WIDTH;
 }
 
 function Marker({ value, color, label, lane }) {
-  const left = markerLeft(value);
-  if (left === null) return null;
+  const position = scalePosition(value);
+  if (position === null) return null;
 
   return (
-    <View style={[styles.scaleMarker, { left, top: 16 + lane * 12 }]}>
+    <View
+      style={[
+        styles.scaleMarker,
+        {
+          left: position - SCALE_MARKER_WIDTH / 2,
+          top: 16 + lane * 12,
+        },
+      ]}
+    >
       <View style={[styles.scaleMarkerDot, { backgroundColor: color }]} />
       <Text style={[styles.scaleMarkerLabel, { color }]}>{label}</Text>
     </View>
@@ -117,9 +128,15 @@ function QuestionScale({ item }) {
       <View style={styles.scaleWrap}>
         <View style={styles.scaleTrack} />
         {[1, 2, 3, 4, 5].map((value) => {
-          const left = markerLeft(value);
+          const position = scalePosition(value);
           return (
-            <View key={value} style={[styles.scaleTickWrap, { left }]}>
+            <View
+              key={value}
+              style={[
+                styles.scaleTickWrap,
+                { left: position - SCALE_TICK_WIDTH / 2 },
+              ]}
+            >
               <Text style={styles.scaleTickLabel}>{value}</Text>
               <View style={styles.scaleTick} />
             </View>
@@ -411,8 +428,7 @@ const styles = {
   scaleTickWrap: {
     position: "absolute",
     top: 6,
-    width: 28,
-    marginLeft: -14,
+    width: SCALE_TICK_WIDTH,
     alignItems: "center",
   },
   scaleTickLabel: {
@@ -428,8 +444,7 @@ const styles = {
   },
   scaleMarker: {
     position: "absolute",
-    width: 34,
-    marginLeft: 1,
+    width: SCALE_MARKER_WIDTH,
     alignItems: "center",
   },
   scaleMarkerDot: {

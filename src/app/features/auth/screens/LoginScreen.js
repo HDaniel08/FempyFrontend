@@ -13,6 +13,8 @@ import {
   Image,
   Animated,
   Easing,
+  ScrollView,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../../../auth/AuthContext";
@@ -24,7 +26,8 @@ export default function LoginScreen() {
   //LOGIN demo@demo.hu pass1234
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(null);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
   // UI phase:
   // "opening" -> card opens on mount
@@ -38,7 +41,7 @@ export default function LoginScreen() {
   // ----- Card animation -----
   // Height anim (native driver off), but looks clean and controllable.
   const COLLAPSED_H = 150; // logo-only card height
-  const EXPANDED_H = 420; // full form card height (adjust if needed)
+  const EXPANDED_H = 470; // full form card height (adjust if needed)
 
   const cardH = useRef(new Animated.Value(COLLAPSED_H)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
@@ -50,12 +53,6 @@ export default function LoginScreen() {
 
   // Prevent double press
   const busyRef = useRef(false);
-  const timersRef = useRef([]);
-
-  function clearTimers() {
-    timersRef.current.forEach((t) => clearTimeout(t));
-    timersRef.current = [];
-  }
 
   function getErrorText(e) {
     const msg = e?.data?.message || e?.message || "Ismeretlen hiba";
@@ -88,9 +85,6 @@ export default function LoginScreen() {
       }),
     ]).start(() => setPhase("idle"));
 
-    return () => {
-      clearTimers();
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -143,11 +137,37 @@ export default function LoginScreen() {
     ]).start(() => setPhase("idle"));
   }
 
-  async function runFakeProgressThenLogin() {
-    // Fake timeline: 10s
-    const D = 10000;
+  function animateProgressTo(toValue, duration, easing) {
+    return new Promise((resolve) => {
+      Animated.timing(progress, {
+        toValue,
+        duration,
+        easing,
+        useNativeDriver: false,
+      }).start(resolve);
+    });
+  }
 
-    setStatusText("Kapcsolódás…");
+  async function runPostLoginProgress() {
+    progress.stopAnimation();
+    setStatusText("Sikeres bejelentkezés");
+    await animateProgressTo(0.42, 220, Easing.out(Easing.quad));
+
+    const steps = [
+      { value: 0.58, text: "Jogosultságok betöltése…" },
+      { value: 0.74, text: "Profil inicializálása…" },
+      { value: 0.9, text: "Felület előkészítése…" },
+      { value: 1, text: "Befejezés…" },
+    ];
+
+    for (const step of steps) {
+      setStatusText(step.text);
+      await animateProgressTo(step.value, 420, Easing.inOut(Easing.cubic));
+    }
+  }
+
+  async function runLoginProgress() {
+    setStatusText("Bejelentkezési adatok ellenőrzése…");
     progress.setValue(0);
     progressOpacity.setValue(0);
 
@@ -158,59 +178,36 @@ export default function LoginScreen() {
       useNativeDriver: true,
     }).start();
 
-    // Status steps (kamu)
-    const steps = [
-      { t: 0.12, text: "Biztonsági ellenőrzés…" },
-      { t: 0.28, text: "Tenant betöltése…" },
-      { t: 0.44, text: "Jogosultságok…" },
-      { t: 0.6, text: "Profil inicializálása…" },
-      { t: 0.76, text: "Felület előkészítése…" },
-      { t: 0.92, text: "Befejezés…" },
-    ];
-
-    steps.forEach((s) => {
-      const timer = setTimeout(
-        () => setStatusText(s.text),
-        Math.floor(D * s.t),
-      );
-      timersRef.current.push(timer);
-    });
-
-    // Animate progress bar
+    // A kérés ideje alatt az első szakasz halad, de nem futhat a sikerpont fölé.
     Animated.timing(progress, {
-      toValue: 1,
-      duration: D,
-      easing: Easing.inOut(Easing.cubic),
+      toValue: 0.35,
+      duration: 8000,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
 
-    // Real login near the end (so the screen doesn't navigate away early)
-    // If login fails: reopen card + show error.
-    const loginTimer = setTimeout(async () => {
-      try {
-        await loginGlobal({ email: email.trim(), password });
-        setStatusText("Kész.");
-        // auth flow likely navigates away automatically after this
-      } catch (e) {
-        setError(getErrorText(e));
-        setPhase("idle");
-        // hide progress
-        Animated.timing(progressOpacity, {
-          toValue: 0,
-          duration: 200,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start(() => {
-          setStatusText("");
-          progress.setValue(0);
-        });
-        // reopen card
-        animateToExpanded();
-      } finally {
-        busyRef.current = false;
-      }
-    }, 8500);
-    timersRef.current.push(loginTimer);
+    try {
+      await loginGlobal({
+        email: email.trim(),
+        password,
+        onAuthenticated: runPostLoginProgress,
+      });
+    } catch (e) {
+      progress.stopAnimation();
+      Alert.alert("Sikertelen bejelentkezés", getErrorText(e));
+      Animated.timing(progressOpacity, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start(() => {
+        setStatusText("");
+        progress.setValue(0);
+      });
+      animateToExpanded();
+    } finally {
+      busyRef.current = false;
+    }
   }
   async function connectionTest(){
      apiFetch("/health", {
@@ -229,14 +226,51 @@ export default function LoginScreen() {
     if (email.trim().length <= 3 || password.length === 0) return;
 
     busyRef.current = true;
-    setError(null);
     setPhase("loading");
 
     // collapse card to logo-only
     animateToCollapsed();
 
-    // start fake progress under it
-    runFakeProgressThenLogin();
+    // Valós API-válaszra váró szakasz, majd siker esetén előkészítési animáció.
+    runLoginProgress();
+  }
+
+  async function onForgotPasswordPress() {
+    if (resetBusy || phase !== "idle") return;
+
+    const normalizedEmail = email.trim();
+    if (normalizedEmail.length <= 3 || !normalizedEmail.includes("@")) {
+      Alert.alert(
+        "Email cím szükséges",
+        "Add meg a fiókodhoz tartozó érvényes email címet.",
+      );
+      return;
+    }
+
+    setResetBusy(true);
+    Keyboard.dismiss();
+    try {
+      const result = await apiFetch("/auth/forgot-password", {
+        method: "POST",
+        body: { email: normalizedEmail },
+        skipTenant: true,
+      });
+      Alert.alert(
+        "Kérés elküldve",
+        result?.message ??
+          "Ha az email címhez tartozik aktív fiók, elküldtük az ideiglenes jelszót.",
+        [
+          {
+            text: "Rendben",
+            onPress: () => setIsForgotPassword(false),
+          },
+        ],
+      );
+    } catch (e) {
+      Alert.alert("Nem sikerült elküldeni", getErrorText(e));
+    } finally {
+      setResetBusy(false);
+    }
   }
 
   const canSubmit =
@@ -251,7 +285,7 @@ export default function LoginScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView
         style={styles.screen}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <LinearGradient
           colors={[colors.primary100, colors.primary50, colors.white]}
@@ -260,9 +294,15 @@ export default function LoginScreen() {
           style={StyleSheet.absoluteFill}
         />
 
-        <View style={styles.centerWrap}>
-          {/* Animated card with controlled height */}
-          <Animated.View style={[styles.card, { height: cardH }]}>
+        <ScrollView
+          contentContainerStyle={styles.centerWrap}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          showsVerticalScrollIndicator={false}
+        >
+          <View>
+            {/* Animated card with controlled height */}
+            <Animated.View style={[styles.card, { height: cardH }]}>
             {/* Logo always visible */}
             <Image
               source={require("../../../../../assets/logo.png")}
@@ -278,9 +318,13 @@ export default function LoginScreen() {
               }}
             >
               <View style={styles.header}>
-                <Text style={styles.title}>Bejelentkezés</Text>
+                <Text style={styles.title}>
+                  {isForgotPassword ? "Elfelejtett jelszó" : "Bejelentkezés"}
+                </Text>
                 <Text style={styles.subtitle}>
-                  Add meg az adataid a folytatáshoz
+                  {isForgotPassword
+                    ? "Ideiglenes jelszót küldünk emailben"
+                    : "Add meg az adataid a folytatáshoz"}
                 </Text>
               </View>
 
@@ -299,58 +343,95 @@ export default function LoginScreen() {
                 />
               </View>
 
-              <View style={styles.field}>
-                <Text style={styles.label}>Jelszó</Text>
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Jelszó"
-                  placeholderTextColor={colors.textLight}
-                  secureTextEntry
-                  style={styles.input}
-                  editable={phase === "idle"}
-                  returnKeyType="done"
-                  onSubmitEditing={onLoginPress}
-                />
-              </View>
-
-              {error ? (
-                <View style={styles.errorBox}>
-                  <Text style={styles.errorTitle}>
-                    Sikertelen bejelentkezés
+              {isForgotPassword ? (
+                <>
+                  <Text style={styles.resetHint}>
+                    A levélben kapott 8 karakteres jelszóval jelentkezz be.
+                    Ezután kötelezően be kell állítanod egy új jelszót.
                   </Text>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
+                  <Pressable
+                    onPress={onForgotPasswordPress}
+                    disabled={resetBusy}
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      resetBusy && styles.primaryBtnDisabled,
+                      pressed && !resetBusy && styles.primaryBtnPressed,
+                    ]}
+                  >
+                    {resetBusy ? (
+                      <ActivityIndicator color={colors.white} />
+                    ) : (
+                      <Text style={styles.primaryBtnText}>
+                        Ideiglenes jelszó küldése
+                      </Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setIsForgotPassword(false)}
+                    disabled={resetBusy}
+                    style={styles.linkButton}
+                  >
+                    <Text style={styles.linkButtonText}>
+                      Vissza a bejelentkezéshez
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <View style={styles.field}>
+                    <Text style={styles.label}>Jelszó</Text>
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="Jelszó"
+                      placeholderTextColor={colors.textLight}
+                      secureTextEntry
+                      style={styles.input}
+                      editable={phase === "idle"}
+                      returnKeyType="done"
+                      onSubmitEditing={onLoginPress}
+                    />
+                  </View>
 
-              <Pressable
-                onPress={onLoginPress}
-                disabled={!canSubmit}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  !canSubmit && styles.primaryBtnDisabled,
-                  pressed && canSubmit && styles.primaryBtnPressed,
-                ]}
-              >
-                {phase === "loading" ? (
-                  <ActivityIndicator />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Belépés</Text>
-                )}
-              </Pressable>
+                  <Pressable
+                    onPress={onLoginPress}
+                    disabled={!canSubmit}
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      !canSubmit && styles.primaryBtnDisabled,
+                      pressed && canSubmit && styles.primaryBtnPressed,
+                    ]}
+                  >
+                    {phase === "loading" ? (
+                      <ActivityIndicator />
+                    ) : (
+                      <Text style={styles.primaryBtnText}>Belépés</Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setIsForgotPassword(true)}
+                    style={styles.linkButton}
+                  >
+                    <Text style={styles.linkButtonText}>
+                      Elfelejtetted a jelszavad?
+                    </Text>
+                  </Pressable>
+                </>
+              )}
             </Animated.View>
-          </Animated.View>
+            </Animated.View>
 
-          {/* Fake progress shown UNDER the collapsed card */}
-          <Animated.View
-            style={[styles.progressWrap, { opacity: progressOpacity }]}
-          >
-            <Text style={styles.progressText}>{statusText}</Text>
-            <View style={styles.pbTrack}>
-              <Animated.View style={[styles.pbFill, { width: fillW }]} />
-            </View>
-          </Animated.View>
-        </View>
+            {/* Fake progress shown UNDER the collapsed card */}
+            <Animated.View
+              style={[styles.progressWrap, { opacity: progressOpacity }]}
+            >
+              <Text style={styles.progressText}>{statusText}</Text>
+              <View style={styles.pbTrack}>
+                <Animated.View style={[styles.pbFill, { width: fillW }]} />
+              </View>
+            </Animated.View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
   );
@@ -361,8 +442,9 @@ function createStyles() {
     screen: { flex: 1 },
 
     centerWrap: {
-      flex: 1,
+      flexGrow: 1,
       paddingHorizontal: 18,
+      paddingVertical: 24,
       justifyContent: "center",
     },
 
@@ -430,26 +512,6 @@ function createStyles() {
       color: colors.textDark,
     },
 
-    errorBox: {
-      borderWidth: 1,
-      borderColor: colors.accent300,
-      backgroundColor: colors.primary50,
-      padding: 12,
-      borderRadius: 12,
-      gap: 4,
-    },
-
-    errorTitle: {
-      fontSize: 13,
-      fontWeight: "800",
-      color: colors.accent700,
-    },
-
-    errorText: {
-      fontSize: 13,
-      color: colors.textDark,
-    },
-
     primaryBtn: {
       height: 46,
       borderRadius: 14,
@@ -473,6 +535,28 @@ function createStyles() {
       color: colors.white,
       fontSize: 15,
       fontWeight: "900",
+    },
+
+    resetHint: {
+      marginTop: 10,
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textLight,
+      textAlign: "center",
+    },
+
+    linkButton: {
+      minHeight: 40,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 8,
+    },
+
+    linkButtonText: {
+      color: colors.accent700,
+      fontSize: 13,
+      fontWeight: "800",
+      textAlign: "center",
     },
 
     // --- Fake progress UI (under card) ---

@@ -108,13 +108,17 @@ export function AuthProvider({ children }) {
    * - tenantSlug nincs előre
    * - backend visszaad: accessToken + tenant.slug
    */
-  async function loginGlobal({ email, password }) {
+  async function loginGlobal({ email, password, onAuthenticated }) {
     // Tenant header nélkül hívjuk
     const res = await apiFetch("/auth/login-global", {
       method: "POST",
       body: { email, password },
       skipTenant: true,
     });
+
+    if (onAuthenticated) {
+      await onAuthenticated();
+    }
 
     if (typeof res?.tenant?.appAccessEnabled === "boolean") {
       setTenantAppAccessEnabled(res.tenant.appAccessEnabled);

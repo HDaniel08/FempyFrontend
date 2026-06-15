@@ -78,6 +78,7 @@ export default function DailyQuestionsScreen() {
           answerId,
           answer,
         },
+        networkRetries: 2,
       });
 
       await animateTo(-SCREEN_WIDTH, 220);
@@ -96,7 +97,17 @@ export default function DailyQuestionsScreen() {
       }
     } catch (err) {
       console.log("submit error:", err);
-      Alert.alert("Hiba", "Nem sikerült elküldeni a választ.");
+      const isNetworkError =
+        err instanceof TypeError &&
+        /network request failed|failed to fetch|load failed/i.test(
+          String(err?.message),
+        );
+      Alert.alert(
+        "Hiba",
+        isNetworkError
+          ? "A hálózati kapcsolat megszakadt. Ellenőrizd az internetkapcsolatot, majd próbáld újra."
+          : err?.message || "Nem sikerült elküldeni a választ.",
+      );
       await animateTo(0, 180);
     } finally {
       setSubmitting(false);

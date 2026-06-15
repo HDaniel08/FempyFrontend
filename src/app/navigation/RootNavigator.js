@@ -76,16 +76,16 @@ function ForcedPasswordModal({ onSubmit }) {
   return (
     <View style={styles.passwordWall} pointerEvents="auto">
       <View style={styles.passwordCard}>
-        <Text style={styles.passwordTitle}>Allitsd be a jelszavad</Text>
+        <Text style={styles.passwordTitle}>Állitsd be a jelszavad</Text>
         <Text style={styles.passwordText}>
-          Az elso belepeshez adj meg egy sajat jelszot. Ezt kesobb a fiok
-          beallitasainal is modositani tudod.
+          Az első belépéshez adj meg egy saját jelszót. Ezt kesőbb a fiók
+          beállitasainal is modositani tudod.
         </Text>
 
         <TextInput
           value={newPassword}
           onChangeText={setNewPassword}
-          placeholder="Uj jelszo"
+          placeholder="új jelszó"
           placeholderTextColor="rgba(74, 93, 122, 0.45)"
           secureTextEntry
           autoCapitalize="none"
@@ -94,7 +94,7 @@ function ForcedPasswordModal({ onSubmit }) {
         <TextInput
           value={confirmPassword}
           onChangeText={setConfirmPassword}
-          placeholder="Uj jelszo meg egyszer"
+          placeholder="új jelszó még egyszer"
           placeholderTextColor="rgba(74, 93, 122, 0.45)"
           secureTextEntry
           autoCapitalize="none"

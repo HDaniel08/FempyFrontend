@@ -43,7 +43,14 @@ export async function clearSession() {
  */
 export async function apiFetch(
   path,
-  { method = "GET", body, headers, skipTenant = false } = {}
+  {
+    method = "GET",
+    body,
+    headers,
+    skipTenant = false,
+    networkRetries = 0,
+    retryDelayMs = 700,
+  } = {}
 ) {
   if (typeof path !== "string" || path.length === 0) {
     throw new Error(`apiFetch() hibás path: ${String(path)}`);
@@ -60,53 +67,67 @@ export async function apiFetch(
   console.log("apiFetch token exists:", !!token);
   console.log("1");
 */
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(!skipTenant && tenantSlug ? { "x-tenant-slug": tenantSlug } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(headers || {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    //console.log("2");
-    //console.log("status:", res.status);
-
-    const rawText = await res.text();
-    let data = null;
-
+  for (let attempt = 0; attempt <= networkRetries; attempt += 1) {
     try {
-      data = rawText ? JSON.parse(rawText) : null;
-    } catch {
-      data = rawText ? { raw: rawText } : null;
-    }
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(!skipTenant && tenantSlug ? { "x-tenant-slug": tenantSlug } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(headers || {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
 
-    if (!res.ok) {
-      const message =
-        data?.message ||
-        data?.error ||
-        (typeof data === "string" ? data : null) ||
-        `HTTP ${res.status}`;
+      //console.log("2");
+      //console.log("status:", res.status);
 
-      const error = new Error(
-        Array.isArray(message) ? message.join("\n") : String(message)
-      );
-      error.status = res.status;
-      error.data = data;
+      const rawText = await res.text();
+      let data = null;
 
-      if (res.status === 401) {
-        await clearSession();
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        data = rawText ? { raw: rawText } : null;
       }
 
-      throw error;
-    }
+      if (!res.ok) {
+        const message =
+          data?.message ||
+          data?.error ||
+          (typeof data === "string" ? data : null) ||
+          `HTTP ${res.status}`;
 
-    return data;
-  } catch (err) {
-    console.log("FETCH ERROR:", err);
-    throw err;
+        const error = new Error(
+          Array.isArray(message) ? message.join("\n") : String(message)
+        );
+        error.status = res.status;
+        error.data = data;
+
+        if (res.status === 401) {
+          await clearSession();
+        }
+
+        throw error;
+      }
+
+      return data;
+    } catch (err) {
+      const isNetworkError =
+        err instanceof TypeError &&
+        /network request failed|failed to fetch|load failed/i.test(
+          String(err?.message),
+        );
+
+      if (!isNetworkError || attempt === networkRetries) {
+        console.log("FETCH ERROR:", err);
+        throw err;
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, retryDelayMs * (attempt + 1)),
+      );
+    }
   }
 }

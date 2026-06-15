@@ -280,12 +280,12 @@ export default function LeadershipSelfFlow() {
 
         <View style={styles.filterRow}>
           <Chip
-            label="5 perc"
+            label="max 5 perc"
             active={selectedTime === "5"}
             onPress={() => setSelectedTime("5")}
           />
           <Chip
-            label="15 perc"
+            label="max 15 perc"
             active={selectedTime === "15"}
             onPress={() => setSelectedTime("15")}
           />
@@ -324,7 +324,7 @@ export default function LeadershipSelfFlow() {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Kereses cim, tema vagy forras alapjan"
+          placeholder="Keresés cím, téma vagy forrás alapján"
           placeholderTextColor={colors.textLight}
           style={styles.searchInput}
         />
