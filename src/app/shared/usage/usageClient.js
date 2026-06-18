@@ -1,5 +1,6 @@
 import { AppState, Platform } from "react-native";
 import { apiFetch } from "../api/http";
+import { getCurrentAppVersion } from "../version/versionClient";
 
 const HEARTBEAT_MS = 60000;
 
@@ -14,6 +15,7 @@ async function sendHeartbeat() {
     body: {
       sessionId,
       platform: Platform.OS,
+      appVersion: getCurrentAppVersion().version,
     },
   });
   if (res?.id) sessionId = res.id;

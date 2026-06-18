@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -18,11 +19,18 @@ import { colors } from "../../theme/colors";
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-  const { isBooting, isAuthenticated, tenantAppAccessEnabled, user, changePassword } =
-    useAuth();
+  const {
+    isBooting,
+    isAuthenticated,
+    tenantAppAccessEnabled,
+    appVersionStatus,
+    user,
+    changePassword,
+  } = useAuth();
 
   const isAppAccessDisabled =
     isAuthenticated && tenantAppAccessEnabled === false;
+  const requiresUpdate = appVersionStatus?.requiresUpdate === true;
 
   if (isBooting) return null;
 
@@ -38,10 +46,53 @@ export default function RootNavigator() {
         </Stack.Navigator>
       </NavigationContainer>
 
-      {isAppAccessDisabled ? <TenantAccessWall /> : null}
+      {isAppAccessDisabled && !requiresUpdate ? <TenantAccessWall /> : null}
+      {requiresUpdate ? <ForcedUpdateWall status={appVersionStatus} /> : null}
       {isAuthenticated && user?.mustChangePassword ? (
         <ForcedPasswordModal onSubmit={changePassword} />
       ) : null}
+    </View>
+  );
+}
+
+function ForcedUpdateWall({ status }) {
+  const storeUrl = status?.required?.storeUrl;
+
+  async function openStore() {
+    if (!storeUrl) return;
+    try {
+      await Linking.openURL(storeUrl);
+    } catch (error) {
+      console.log("Store link megnyitasa sikertelen:", error?.message);
+    }
+  }
+
+  return (
+    <View style={styles.updateWall} pointerEvents="auto">
+      <View style={styles.wallCard}>
+        <Text style={styles.wallTitle}>Frissites szukseges</Text>
+        <Text style={styles.wallText}>
+          {status?.message ||
+            "Az alkalmazas ujabb verzioja szukseges a folytatashoz."}
+        </Text>
+        <Text style={styles.wallMeta}>
+          Jelenlegi: {status?.current?.version ?? "-"} (
+          {status?.current?.buildNumber ?? "-"}) - minimum:{" "}
+          {status?.required?.minVersion ?? "-"} (
+          {status?.required?.minBuild ?? "-"})
+        </Text>
+        {storeUrl ? (
+          <Pressable
+            onPress={openStore}
+            style={({ pressed }) => [
+              styles.updateButton,
+              pressed && styles.updateButtonPressed,
+            ]}
+          >
+            <Text style={styles.updateButtonText}>Frissites megnyitasa</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -178,6 +229,39 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.textLight,
     textAlign: "center",
+  },
+  updateWall: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 11000,
+    elevation: 11000,
+    backgroundColor: "rgba(245, 249, 253, 0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  wallMeta: {
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: "rgba(74, 93, 122, 0.72)",
+    textAlign: "center",
+  },
+  updateButton: {
+    marginTop: 18,
+    minHeight: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent500,
+  },
+  updateButtonPressed: {
+    opacity: 0.72,
+  },
+  updateButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "900",
   },
   passwordWall: {
     ...StyleSheet.absoluteFillObject,

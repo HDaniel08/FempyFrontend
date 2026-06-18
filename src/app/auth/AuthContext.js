@@ -19,6 +19,7 @@ import {
   startUsageTracking,
   stopUsageTracking,
 } from "../shared/usage/usageClient";
+import { checkAppVersion } from "../shared/version/versionClient";
 /**
  * AuthContext célja:
  * - tudd, be van-e jelentkezve a user
@@ -42,6 +43,16 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
   const [tenantSlug, setTenant] = useState(null);
   const [tenantAppAccessEnabled, setTenantAppAccessEnabled] = useState(true);
+  const [appVersionStatus, setAppVersionStatus] = useState({
+    supported: true,
+    requiresUpdate: false,
+  });
+
+  async function refreshAppVersion() {
+    const status = await checkAppVersion();
+    setAppVersionStatus(status);
+    return status;
+  }
 
   async function refreshMe() {
     const me = await apiFetch("/auth/me");
@@ -56,6 +67,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     (async () => {
       try {
+        const versionStatus = await refreshAppVersion();
+        if (versionStatus?.requiresUpdate) {
+          setIsBooting(false);
+          return;
+        }
         const savedToken = await getAuthToken();
         const savedTenant = await getTenantSlug();
 
@@ -95,6 +111,10 @@ export function AuthProvider({ children }) {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
 
+      refreshAppVersion().catch((e) => {
+        console.log("App verzio frissites hiba:", e?.message);
+      });
+
       refreshMe().catch((e) => {
         console.log("Session frissítés hiba:", e?.message);
       });
@@ -109,6 +129,14 @@ export function AuthProvider({ children }) {
    * - backend visszaad: accessToken + tenant.slug
    */
   async function loginGlobal({ email, password, onAuthenticated }) {
+    const versionStatus = await refreshAppVersion();
+    if (versionStatus?.requiresUpdate) {
+      throw new Error(
+        versionStatus.message ||
+          "Az alkalmazas frissitese szukseges a folytatashoz.",
+      );
+    }
+
     // Tenant header nélkül hívjuk
     const res = await apiFetch("/auth/login-global", {
       method: "POST",
@@ -173,12 +201,21 @@ export function AuthProvider({ children }) {
       token,
       tenantSlug,
       tenantAppAccessEnabled,
+      appVersionStatus,
       loginGlobal,
       logout,
       refreshMe,
+      refreshAppVersion,
       changePassword,
     };
-  }, [isBooting, user, token, tenantSlug, tenantAppAccessEnabled]);
+  }, [
+    isBooting,
+    user,
+    token,
+    tenantSlug,
+    tenantAppAccessEnabled,
+    appVersionStatus,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
