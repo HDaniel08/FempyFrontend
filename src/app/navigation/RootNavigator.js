@@ -63,17 +63,17 @@ function ForcedUpdateWall({ status }) {
     try {
       await Linking.openURL(storeUrl);
     } catch (error) {
-      console.log("Store link megnyitasa sikertelen:", error?.message);
+      console.log("Store link megnyitása sikertelen:", error?.message);
     }
   }
 
   return (
     <View style={styles.updateWall} pointerEvents="auto">
       <View style={styles.wallCard}>
-        <Text style={styles.wallTitle}>Frissites szukseges</Text>
+        <Text style={styles.wallTitle}>Frissítés szükséges</Text>
         <Text style={styles.wallText}>
           {status?.message ||
-            "Az alkalmazas ujabb verzioja szukseges a folytatashoz."}
+            "Az alkalmazás újabb verziója szükséges a folytatáshoz."}
         </Text>
         <Text style={styles.wallMeta}>
           Jelenlegi: {status?.current?.version ?? "-"} (
@@ -89,7 +89,7 @@ function ForcedUpdateWall({ status }) {
               pressed && styles.updateButtonPressed,
             ]}
           >
-            <Text style={styles.updateButtonText}>Frissites megnyitasa</Text>
+            <Text style={styles.updateButtonText}>Frissítés megnyitása</Text>
           </Pressable>
         ) : null}
       </View>
@@ -106,11 +106,11 @@ function ForcedPasswordModal({ onSubmit }) {
   async function handleSubmit() {
     setError("");
     if (newPassword.length < 8) {
-      setError("Az uj jelszo legalabb 8 karakter legyen.");
+      setError("Az új jelszó legalább 8 karakter legyen.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("A ket jelszo nem egyezik.");
+      setError("A két jelszó nem egyezik.");
       return;
     }
 
@@ -118,7 +118,7 @@ function ForcedPasswordModal({ onSubmit }) {
     try {
       await onSubmit({ newPassword });
     } catch (e) {
-      setError(e?.message ?? "Nem sikerult beallitani a jelszot.");
+      setError(e?.message ?? "Nem sikerült beállítani a jelszót.");
     } finally {
       setSaving(false);
     }
@@ -127,10 +127,10 @@ function ForcedPasswordModal({ onSubmit }) {
   return (
     <View style={styles.passwordWall} pointerEvents="auto">
       <View style={styles.passwordCard}>
-        <Text style={styles.passwordTitle}>Állitsd be a jelszavad</Text>
+        <Text style={styles.passwordTitle}>Állítsd be a jelszavad</Text>
         <Text style={styles.passwordText}>
-          Az első belépéshez adj meg egy saját jelszót. Ezt kesőbb a fiók
-          beállitasainal is modositani tudod.
+          Az első belépéshez adj meg egy saját jelszót. Ezt később a fiók
+          beállításainál is módosítani tudod.
         </Text>
 
         <TextInput
@@ -165,7 +165,7 @@ function ForcedPasswordModal({ onSubmit }) {
           {saving ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.passwordButtonText}>Jelszo beallitasa</Text>
+            <Text style={styles.passwordButtonText}>Jelszó beállítása</Text>
           )}
         </Pressable>
       </View>
